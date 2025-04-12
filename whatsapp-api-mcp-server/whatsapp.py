@@ -1,0 +1,306 @@
+from datetime import datetime
+from dataclasses import dataclass
+from typing import Optional, List, Tuple, Dict, Any
+import os
+import requests
+import json
+
+from wati_api import wati_api, Message, Chat, Contact, MessageContext
+
+def search_contacts(query: str) -> List[Dict[str, Any]]:
+    """Search WhatsApp contacts by name or phone number."""
+    contacts = wati_api.search_contacts(query)
+    
+    # Convert to dictionary format for the MCP API
+    result = []
+    for contact in contacts:
+        result.append({
+            "phone_number": contact.phone_number,
+            "name": contact.name,
+            "jid": contact.jid
+        })
+    
+    return result
+
+def list_messages(
+    after: Optional[str] = None,
+    before: Optional[str] = None,
+    sender_phone_number: Optional[str] = None,
+    chat_jid: Optional[str] = None,
+    query: Optional[str] = None,
+    limit: int = 20,
+    page: int = 0,
+    include_context: bool = True,
+    context_before: int = 1,
+    context_after: int = 1
+) -> List[Dict[str, Any]]:
+    """Get WhatsApp messages matching specified criteria with optional context."""
+    # Convert string dates to datetime if provided
+    from_date = None
+    to_date = None
+    
+    if after:
+        try:
+            from_date = datetime.fromisoformat(after)
+        except ValueError:
+            raise ValueError(f"Invalid date format for 'after': {after}. Please use ISO-8601 format.")
+
+    if before:
+        try:
+            to_date = datetime.fromisoformat(before)
+        except ValueError:
+            raise ValueError(f"Invalid date format for 'before': {before}. Please use ISO-8601 format.")
+            
+    # Extract phone number from chat_jid if provided
+    phone_number = None
+    if chat_jid and "@" in chat_jid:
+        phone_number = chat_jid.split("@")[0]
+    elif chat_jid:
+        phone_number = chat_jid
+    elif sender_phone_number:
+        phone_number = sender_phone_number
+    
+    if not phone_number:
+        return []
+    
+    # Get messages from the API
+    messages = wati_api.get_messages(
+        whatsapp_number=phone_number,
+        page_size=limit,
+        page_number=page + 1,  # API uses 1-based indexing
+        from_date=from_date,
+        to_date=to_date
+    )
+    
+    # Format the messages for the response
+    result = []
+    for message in messages:
+        result.append({
+            "timestamp": message.timestamp.isoformat(),
+            "sender": message.sender,
+            "content": message.content,
+            "is_from_me": message.is_from_me,
+            "chat_jid": message.chat_jid,
+            "id": message.id,
+            "media_type": message.media_type
+        })
+    
+    return result
+
+def format_message(message: Message, show_chat_info: bool = True) -> str:
+    """Format a single message with consistent formatting."""
+    output = ""
+    
+    output += f"[{message.timestamp:%Y-%m-%d %H:%M:%S}] "
+        
+    content_prefix = ""
+    if message.media_type:
+        content_prefix = f"[{message.media_type} - Message ID: {message.id} - Chat JID: {message.chat_jid}] "
+    
+    sender_name = "Me" if message.is_from_me else message.sender
+    output += f"From: {sender_name}: {content_prefix}{message.content}\n"
+    
+    return output
+
+def format_messages_list(messages: List[Message], show_chat_info: bool = True) -> str:
+    """Format a list of messages for display."""
+    output = ""
+    if not messages:
+        output += "No messages to display."
+        return output
+    
+    for message in messages:
+        output += format_message(message, show_chat_info)
+    
+    return output
+
+def list_chats(
+    query: Optional[str] = None,
+    limit: int = 20,
+    page: int = 0,
+    include_last_message: bool = True,
+    sort_by: str = "last_active"
+) -> List[Dict[str, Any]]:
+    """Get WhatsApp chats matching specified criteria."""
+    # For now, just return a list of contacts as chats
+    contacts = wati_api.get_contacts(page_size=limit, page_number=page+1)
+    
+    result = []
+    for contact in contacts:
+        # Get the last message for this contact if requested
+        last_message = None
+        last_message_time = None
+        last_sender = None
+        last_is_from_me = None
+        
+        if include_last_message:
+            messages = wati_api.get_messages(contact.phone_number, page_size=1, page_number=1)
+            if messages:
+                last_message = messages[0].content
+                last_message_time = messages[0].timestamp.isoformat()
+                last_sender = messages[0].sender
+                last_is_from_me = messages[0].is_from_me
+        
+        chat = {
+            "jid": contact.jid,
+            "name": contact.name,
+            "last_message_time": last_message_time,
+            "last_message": last_message,
+            "last_sender": last_sender,
+            "last_is_from_me": last_is_from_me,
+            "is_group": False  # Wati API doesn't expose group info directly
+        }
+        
+        result.append(chat)
+    
+    return result
+
+def get_chat(chat_jid: str, include_last_message: bool = True) -> Dict[str, Any]:
+    """Get WhatsApp chat metadata by JID."""
+    # Extract phone number from chat_jid
+    phone_number = chat_jid
+    if "@" in chat_jid:
+        phone_number = chat_jid.split("@")[0]
+    
+    # Get contact info
+    contacts = wati_api.get_contacts(name=phone_number)
+    
+    if not contacts:
+        return {}
+    
+    contact = contacts[0]
+    
+    # Get the last message if requested
+    last_message = None
+    last_message_time = None
+    last_sender = None
+    last_is_from_me = None
+    
+    if include_last_message:
+        messages = wati_api.get_messages(contact.phone_number, page_size=1, page_number=1)
+        if messages:
+            last_message = messages[0].content
+            last_message_time = messages[0].timestamp.isoformat()
+            last_sender = messages[0].sender
+            last_is_from_me = messages[0].is_from_me
+    
+    return {
+        "jid": contact.jid,
+        "name": contact.name,
+        "last_message_time": last_message_time,
+        "last_message": last_message,
+        "last_sender": last_sender,
+        "last_is_from_me": last_is_from_me,
+        "is_group": False  # Wati API doesn't expose group info directly
+    }
+
+def get_direct_chat_by_contact(sender_phone_number: str) -> Dict[str, Any]:
+    """Get WhatsApp chat metadata by sender phone number."""
+    return get_chat(sender_phone_number)
+
+def get_contact_chats(jid: str, limit: int = 20, page: int = 0) -> List[Dict[str, Any]]:
+    """Get all WhatsApp chats involving the contact."""
+    # With Wati, we only have direct chats, so this just returns a single chat
+    chat = get_chat(jid)
+    
+    if chat:
+        return [chat]
+    else:
+        return []
+
+def get_last_interaction(jid: str) -> str:
+    """Get most recent WhatsApp message involving the contact."""
+    # Extract phone number from jid
+    phone_number = jid
+    if "@" in jid:
+        phone_number = jid.split("@")[0]
+    
+    # Get the last message
+    messages = wati_api.get_messages(phone_number, page_size=1, page_number=1)
+    
+    if messages:
+        return format_message(messages[0])
+    else:
+        return "No recent interactions found."
+
+def get_message_context(
+    message_id: str,
+    before: int = 5,
+    after: int = 5
+) -> Dict[str, Any]:
+    """Get context around a specific WhatsApp message."""
+    # With the Wati API, we need to know which chat the message is in
+    # Since we don't have enough context, let's just get messages from recent chats
+    
+    # Get recent chats
+    chats = list_chats(limit=5)
+    
+    for chat in chats:
+        # Extract phone number from chat_jid
+        chat_jid = chat["jid"]
+        
+        context = wati_api.get_message_context(message_id, chat_jid, before, after)
+        
+        if context:
+            # Format the message context for response
+            return {
+                "message": {
+                    "timestamp": context.message.timestamp.isoformat(),
+                    "sender": context.message.sender,
+                    "content": context.message.content,
+                    "is_from_me": context.message.is_from_me,
+                    "chat_jid": context.message.chat_jid,
+                    "id": context.message.id,
+                    "media_type": context.message.media_type
+                },
+                "before": [
+                    {
+                        "timestamp": msg.timestamp.isoformat(),
+                        "sender": msg.sender,
+                        "content": msg.content,
+                        "is_from_me": msg.is_from_me,
+                        "chat_jid": msg.chat_jid,
+                        "id": msg.id,
+                        "media_type": msg.media_type
+                    }
+                    for msg in context.before
+                ],
+                "after": [
+                    {
+                        "timestamp": msg.timestamp.isoformat(),
+                        "sender": msg.sender,
+                        "content": msg.content,
+                        "is_from_me": msg.is_from_me,
+                        "chat_jid": msg.chat_jid,
+                        "id": msg.id,
+                        "media_type": msg.media_type
+                    }
+                    for msg in context.after
+                ]
+            }
+    
+    return {
+        "message": None,
+        "before": [],
+        "after": []
+    }
+
+def send_message(recipient: str, message: str) -> Tuple[bool, str]:
+    """Send a WhatsApp message to a person or group."""
+    return wati_api.send_message(recipient, message)
+
+def send_file(recipient: str, media_path: str) -> Tuple[bool, str]:
+    """Send a file via WhatsApp to the specified recipient."""
+    return wati_api.send_file(recipient, media_path)
+
+def send_audio_message(recipient: str, media_path: str) -> Tuple[bool, str]:
+    """Send any audio file as a WhatsApp audio message to the specified recipient."""
+    # Wati API doesn't have a specific audio message endpoint, so we use the regular file endpoint
+    return wati_api.send_file(recipient, media_path)
+
+def download_media(message_id: str, chat_jid: str) -> Optional[str]:
+    """Download media from a WhatsApp message and return the local file path."""
+    # In Wati API, we need the filename, not message ID
+    # Since we don't have a way to get the filename from the message ID,
+    # we'll just use the message ID as the filename for now
+    return wati_api.download_media(message_id)
