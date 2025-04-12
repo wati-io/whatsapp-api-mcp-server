@@ -33,7 +33,7 @@ class Contact:
     """WhatsApp contact data model"""
     phone_number: str
     name: Optional[str]
-    jid: Optional[str] = None
+    waid: Optional[str] = None
     
 @dataclass
 class Message:
@@ -42,7 +42,7 @@ class Message:
     sender: str
     content: str
     is_from_me: bool
-    chat_jid: str
+    chat_waid: str
     id: str
     chat_name: Optional[str] = None
     media_type: Optional[str] = None
@@ -50,17 +50,12 @@ class Message:
 @dataclass
 class Chat:
     """WhatsApp chat data model"""
-    jid: str
+    waid: str
     name: Optional[str]
     last_message_time: Optional[datetime]
     last_message: Optional[str] = None
     last_sender: Optional[str] = None
     last_is_from_me: Optional[bool] = None
-
-    @property
-    def is_group(self) -> bool:
-        """Determine if chat is a group based on JID pattern."""
-        return self.jid.endswith("@g.us")
 
 @dataclass
 class MessageContext:
@@ -188,12 +183,23 @@ class WatiAPI:
                     logger.debug(f"Processing contact: {contact_data}")
                     phone_number = ""
                     name = ""
+                    waid = ""
                     
                     # Try different common field names for phone number
                     for field in ["phone", "phoneNumber", "wAid", "number", "whatsappNumber"]:
                         if field in contact_data and contact_data[field]:
                             phone_number = str(contact_data[field])
                             break
+                    
+                    # Try to get WAID (WhatsApp ID)
+                    for field in ["wAid", "id", "waId", "whatsappId"]:
+                        if field in contact_data and contact_data[field]:
+                            waid = str(contact_data[field])
+                            break
+                    
+                    # If WAID is not found, use phone number as WAID
+                    if not waid and phone_number:
+                        waid = phone_number
                             
                     # Try different common field names for name
                     for field in ["fullName", "firstName", "name", "contactName", "displayName"]:
@@ -205,7 +211,7 @@ class WatiAPI:
                         contact = Contact(
                             phone_number=phone_number,
                             name=name,
-                            jid=phone_number
+                            waid=waid
                         )
                         contacts.append(contact)
         
@@ -339,7 +345,7 @@ class WatiAPI:
                         sender=msg_data.get("owner", "") if is_from_me else whatsapp_number,
                         content=content,
                         is_from_me=is_from_me,
-                        chat_jid=f"whatsapp_number",
+                        chat_waid=whatsapp_number,
                         id=msg_id,
                         media_type=media_type
                     )
@@ -352,26 +358,20 @@ class WatiAPI:
                 
         return messages
 
-    def get_message_context(self, message_id: str, chat_jid: str, before: int = 5, after: int = 5) -> Optional[MessageContext]:
+    def get_message_context(self, message_id: str, chat_waid: str, before: int = 5, after: int = 5) -> Optional[MessageContext]:
         """Get context around a specific message.
         
         Args:
             message_id: The ID of the message to get context for
-            chat_jid: The JID of the chat containing the message
+            chat_waid: The WAID of the chat containing the message
             before: Number of messages to include before the target message
             after: Number of messages to include after the target message
             
         Returns:
             A MessageContext object or None if the message was not found
         """
-        # Extract phone number from JID
-        if "@" in chat_jid:
-            phone_number = chat_jid.split("@")[0]
-        else:
-            phone_number = chat_jid
-            
         # Get all messages for this chat
-        messages = self.get_messages(phone_number, page_size=before + after + 1)
+        messages = self.get_messages(chat_waid, page_size=before + after + 1)
         
         target_message = None
         target_index = -1
@@ -408,16 +408,12 @@ class WatiAPI:
         """Send a WhatsApp message.
         
         Args:
-            recipient: The recipient's phone number or JID
+            recipient: The recipient's phone number or WAID
             message: The message text to send
             
         Returns:
             A tuple of (success, message)
         """
-        # Extract phone number from JID if needed
-        if "@" in recipient:
-            recipient = recipient.split("@")[0]
-            
         endpoint = f"api/v1/sendSessionMessage/{recipient}"
         params = {
             "messageText": message
@@ -434,17 +430,13 @@ class WatiAPI:
         """Send a file via WhatsApp.
         
         Args:
-            recipient: The recipient's phone number or JID
+            recipient: The recipient's phone number or WAID
             media_path: The path to the media file
             caption: Optional caption for the media
             
         Returns:
             A tuple of (success, message)
         """
-        # Extract phone number from JID if needed
-        if "@" in recipient:
-            recipient = recipient.split("@")[0]
-            
         endpoint = f"api/v1/sendSessionFile/{recipient}"
         params = {}
         
@@ -501,11 +493,11 @@ class WatiAPI:
                             
                 return local_path
             else:
-                print(f"Error downloading media: HTTP {response.status_code}")
+                logger.error(f"Error downloading media: HTTP {response.status_code}")
                 return None
                 
         except Exception as e:
-            print(f"Error downloading media: {str(e)}")
+            logger.error(f"Error downloading media: {str(e)}")
             return None
                 
     def send_template_message(self, recipient: str, template_name: str, broadcast_name: str, 
@@ -513,7 +505,7 @@ class WatiAPI:
         """Send a WhatsApp template message.
         
         Args:
-            recipient: The recipient's phone number or JID
+            recipient: The recipient's phone number or WAID
             template_name: The name of the template to use
             broadcast_name: The name for this broadcast
             parameters: List of template parameters as dictionaries with 'name' and 'value' keys
@@ -521,10 +513,6 @@ class WatiAPI:
         Returns:
             A tuple of (success, message)
         """
-        # Extract phone number from JID if needed
-        if "@" in recipient:
-            recipient = recipient.split("@")[0]
-            
         endpoint = f"api/v1/sendTemplateMessage"
         params = {
             "whatsappNumber": recipient
