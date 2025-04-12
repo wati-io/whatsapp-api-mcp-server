@@ -476,7 +476,7 @@ class WatiAPI:
         
         Args:
             recipient: The recipient's phone number or WAID
-            media_path: The path to the media file
+            media_path: The path to the media file or a URL
             caption: Optional caption for the media
             
         Returns:
@@ -488,11 +488,79 @@ class WatiAPI:
         if caption:
             params["caption"] = caption
             
+        # Check if media_path is a URL
+        is_url = media_path.startswith(('http://', 'https://'))
+        temp_file = None
+        
         try:
             url = f"{self.base_url}/{self.tenant_id}/{endpoint}"
             
+            # If it's a URL, download it to a temp file first
+            if is_url:
+                logger.info(f"Detected URL: {media_path}. Downloading to temporary file...")
+                import tempfile
+                import urllib.request
+                from urllib.parse import urlparse
+                from os.path import basename
+                import mimetypes
+                
+                # Create a temporary file with an appropriate extension
+                parsed_url = urlparse(media_path)
+                file_name = basename(parsed_url.path)
+                
+                # If no extension in the URL, default to .tmp
+                extension = os.path.splitext(file_name)[1]
+                if not extension:
+                    extension = ".tmp"
+                
+                # Create the temp file
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=extension)
+                temp_file.close()
+                
+                # Download the file
+                try:
+                    urllib.request.urlretrieve(media_path, temp_file.name)
+                    logger.info(f"Downloaded URL to temporary file: {temp_file.name}")
+                    media_path = temp_file.name
+                except Exception as e:
+                    return False, f"Error downloading file from URL: {str(e)}"
+            
+            # Determine the MIME type of the file
+            content_type = None
+            try:
+                import mimetypes
+                content_type = mimetypes.guess_type(media_path)[0]
+                if not content_type:
+                    # Try to determine content type from extension
+                    ext = os.path.splitext(media_path)[1].lower()
+                    content_type_map = {
+                        '.jpg': 'image/jpeg',
+                        '.jpeg': 'image/jpeg',
+                        '.png': 'image/png',
+                        '.gif': 'image/gif',
+                        '.webp': 'image/webp',
+                        '.pdf': 'application/pdf',
+                        '.mp3': 'audio/mpeg',
+                        '.mp4': 'video/mp4',
+                        '.ogg': 'audio/ogg',
+                        '.txt': 'text/plain',
+                        '.doc': 'application/msword',
+                        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    }
+                    content_type = content_type_map.get(ext, 'application/octet-stream')
+                
+                logger.info(f"Determined content type: {content_type} for file: {media_path}")
+            except Exception as e:
+                logger.warning(f"Failed to determine content type: {str(e)}")
+                content_type = 'application/octet-stream'  # Default fallback
+            
+            # Now send the local file with the appropriate content type
             with open(media_path, "rb") as file:
-                files = {"file": file}
+                # Specify the content type in the files parameter
+                file_tuple = (os.path.basename(media_path), file, content_type)
+                files = {"file": file_tuple}
+                
+                logger.info(f"Sending file {media_path} with content type: {content_type}")
                 response = requests.post(url, headers={"Authorization": self.headers["Authorization"]}, 
                                         params=params, files=files)
                 
@@ -505,6 +573,8 @@ class WatiAPI:
             if isinstance(result, dict):
                 if "message" in result:
                     response_message = result["message"]
+                elif "error" in result:
+                    response_message = result["error"]
             
             # Check both 'result' and 'success' fields
             operation_success = False
@@ -521,6 +591,14 @@ class WatiAPI:
         except Exception as e:
             logger.error(f"Error sending file: {str(e)}")
             return False, f"Error sending file: {str(e)}"
+        finally:
+            # Clean up the temporary file if it exists
+            if temp_file and os.path.exists(temp_file.name):
+                try:
+                    os.unlink(temp_file.name)
+                    logger.info(f"Deleted temporary file: {temp_file.name}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete temporary file {temp_file.name}: {str(e)}")
             
     def download_media(self, file_name: str) -> Optional[str]:
         """Download media from WhatsApp.
