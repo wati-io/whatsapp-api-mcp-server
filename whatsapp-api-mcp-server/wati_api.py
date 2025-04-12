@@ -263,7 +263,12 @@ class WatiAPI:
             
         endpoint = f"api/v1/getMessages/{whatsapp_number}"
         response = self._make_request("GET", endpoint, params=params)
+        logger.debug(f"get_messages complete response: {response}")
         logger.debug(f"get_messages response keys: {list(response.keys()) if isinstance(response, dict) else 'Not a dict'}")
+        
+        # Check if the API call was successful
+        if isinstance(response, dict) and response.get("result") == "success":
+            logger.info("API call was successful")
         
         messages = []
         # Check different possible response formats
@@ -271,8 +276,14 @@ class WatiAPI:
             # Try to find messages data in different possible fields
             messages_data = None
             
-            if "messages" in response:
+            # New API response structure: messages are in 'messages.items'
+            if "messages" in response and isinstance(response["messages"], dict) and "items" in response["messages"]:
+                messages_data = response["messages"]["items"]
+                logger.debug(f"Found {len(messages_data) if messages_data else 0} messages in messages.items")
+            # Check older API response formats
+            elif "messages" in response and isinstance(response["messages"], list):
                 messages_data = response["messages"]
+                logger.debug(f"Found {len(messages_data) if messages_data else 0} messages in messages list")
             elif "conversation" in response:
                 messages_data = response["conversation"]
             elif "data" in response:
@@ -284,7 +295,10 @@ class WatiAPI:
             if not messages_data and "result" in response and isinstance(response["result"], dict):
                 result = response["result"]
                 if "messages" in result:
-                    messages_data = result["messages"]
+                    if isinstance(result["messages"], dict) and "items" in result["messages"]:
+                        messages_data = result["messages"]["items"]
+                    else:
+                        messages_data = result["messages"]
                 elif "conversation" in result:
                     messages_data = result["conversation"]
             
@@ -295,7 +309,7 @@ class WatiAPI:
                     
                     # Try to determine if message is from me
                     is_from_me = False
-                    for field in ["fromMe", "isFromMe", "outgoing", "isSent"]:
+                    for field in ["fromMe", "isFromMe", "outgoing", "isSent", "owner"]:
                         if field in msg_data:
                             is_from_me = bool(msg_data[field])
                             break
@@ -309,6 +323,8 @@ class WatiAPI:
                                 # Try different timestamp formats
                                 if 'T' in time_str:
                                     timestamp = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+                                elif time_str.isdigit():  # Unix timestamp
+                                    timestamp = datetime.fromtimestamp(int(time_str))
                                 else:
                                     try:
                                         timestamp = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
@@ -327,8 +343,8 @@ class WatiAPI:
                     
                     # Try to get message ID
                     msg_id = ""
-                    for field in ["id", "messageId", "message_id"]:
-                        if field in msg_data:
+                    for field in ["id", "messageId", "message_id", "localMessageId"]:
+                        if field in msg_data and msg_data[field]:
                             msg_id = str(msg_data[field])
                             break
                     
@@ -339,10 +355,22 @@ class WatiAPI:
                             media_type = msg_data[field]
                             break
                     
+                    # Determine sender - for outgoing messages, use operator name if available
+                    sender = ""
+                    if is_from_me:
+                        for field in ["operatorName", "assignedId"]:
+                            if field in msg_data and msg_data[field]:
+                                sender = str(msg_data[field])
+                                break
+                        if not sender:
+                            sender = "You"
+                    else:
+                        sender = whatsapp_number
+                    
                     # Create a message object
                     message = Message(
                         timestamp=timestamp,
-                        sender=msg_data.get("owner", "") if is_from_me else whatsapp_number,
+                        sender=sender,
                         content=content,
                         is_from_me=is_from_me,
                         chat_waid=whatsapp_number,
@@ -353,6 +381,8 @@ class WatiAPI:
         
         if not messages:
             logger.warning(f"Failed to parse messages or no messages found. Response structure: {list(response.keys()) if isinstance(response, dict) else 'Not a dict'}")
+            if isinstance(response, dict) and "messages" in response and isinstance(response["messages"], dict):
+                logger.warning(f"Messages structure: {list(response['messages'].keys()) if isinstance(response['messages'], dict) else 'Not a dict'}")
         else:
             logger.info(f"Successfully parsed {len(messages)} messages")
                 
@@ -468,13 +498,28 @@ class WatiAPI:
                 
             response.raise_for_status()
             result = response.json()
+            logger.debug(f"Complete send_file response: {result}")
             
-            if result.get("success", False):
-                return True, "File sent successfully"
-            else:
-                return False, result.get("error", "Unknown error")
+            # Try to get the actual message from the response
+            response_message = "Unknown message"
+            if isinstance(result, dict):
+                if "message" in result:
+                    response_message = result["message"]
+            
+            # Check both 'result' and 'success' fields
+            operation_success = False
+            if isinstance(result, dict):
+                # Check 'result' field first as it seems to indicate the operation success
+                if "result" in result:
+                    operation_success = bool(result["result"])
+                # If no 'result' field, fall back to the 'success' field
+                elif result.get("success", False):
+                    operation_success = True
+            
+            return operation_success, response_message
                 
         except Exception as e:
+            logger.error(f"Error sending file: {str(e)}")
             return False, f"Error sending file: {str(e)}"
             
     def download_media(self, file_name: str) -> Optional[str]:
@@ -540,11 +585,25 @@ class WatiAPI:
         }
         
         response = self._make_request("POST", endpoint, params=params, data=data)
+        logger.debug(f"Complete send_template_message response: {response}")
         
-        if response.get("success", False):
-            return True, "Template message sent successfully"
-        else:
-            return False, response.get("error", "Unknown error")
+        # Try to get the actual message from the response
+        response_message = "Unknown message"
+        if isinstance(response, dict):
+            if "message" in response:
+                response_message = response["message"]
+        
+        # Check both 'result' and 'success' fields
+        operation_success = False
+        if isinstance(response, dict):
+            # Check 'result' field first as it seems to indicate the operation success
+            if "result" in response:
+                operation_success = bool(response["result"])
+            # If no 'result' field, fall back to the 'success' field
+            elif response.get("success", False):
+                operation_success = True
+        
+        return operation_success, response_message
 
 # Create a global API instance
 wati_api = WatiAPI() 
