@@ -12,7 +12,8 @@ from whatsapp import (
     send_message as whatsapp_send_message,
     send_file as whatsapp_send_file,
     send_audio_message as whatsapp_audio_voice_message,
-    download_media as whatsapp_download_media
+    download_media as whatsapp_download_media,
+    send_interactive_buttons as whatsapp_send_interactive_buttons
 )
 
 # Initialize FastMCP server
@@ -245,6 +246,69 @@ def download_media(message_id: str, chat_waid: str) -> Dict[str, Any]:
             "success": False,
             "message": "Failed to download media"
         }
+
+@mcp.tool()
+def send_interactive_buttons(
+    recipient: str,
+    body_text: str,
+    buttons: List[Dict[str, str]],
+    header_text: Optional[str] = None,
+    footer_text: Optional[str] = None,
+    header_image: Optional[str] = None,
+    header_video: Optional[str] = None,
+    header_document: Optional[str] = None
+) -> Dict[str, Any]:
+    """Send an interactive WhatsApp message with buttons.
+    
+    Args:
+        recipient: The recipient's phone number with country code but no + or other symbols
+                 (e.g., "85264318721")
+        body_text: The main text content of the message
+        buttons: List of button objects, each with 'text' key (and optionally 'id')
+        header_text: Optional text to display in the header
+        footer_text: Optional text to display in the footer
+        header_image: Optional URL or local path to an image to display in the header
+        header_video: Optional URL or local path to a video to display in the header
+        header_document: Optional URL or local path to a document to display in the header
+        
+    Returns:
+        A dictionary containing success status and a status message
+    """
+    # Validate input
+    if not recipient:
+        return {
+            "success": False,
+            "message": "Recipient must be provided"
+        }
+    
+    if not body_text:
+        return {
+            "success": False,
+            "message": "Body text must be provided"
+        }
+    
+    if not buttons or not isinstance(buttons, list) or len(buttons) == 0:
+        return {
+            "success": False,
+            "message": "At least one button must be provided"
+        }
+    
+    # Call the whatsapp_send_interactive_buttons function
+    success, status_message = whatsapp_send_interactive_buttons(
+        recipient=recipient,
+        body_text=body_text,
+        buttons=buttons,
+        header_text=header_text,
+        footer_text=footer_text,
+        header_image=header_image,
+        header_video=header_video,
+        header_document=header_document
+    )
+    
+    return {
+        "success": success,
+        "message": status_message
+    }
 
 if __name__ == "__main__":
     # Initialize and run the server

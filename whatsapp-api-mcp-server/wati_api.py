@@ -491,7 +491,7 @@ class WatiAPI:
         # Check if media_path is a URL
         is_url = media_path.startswith(('http://', 'https://'))
         temp_file = None
-        
+            
         try:
             url = f"{self.base_url}/{self.tenant_id}/{endpoint}"
             
@@ -682,6 +682,276 @@ class WatiAPI:
                 operation_success = True
         
         return operation_success, response_message
+    
+    def send_interactive_buttons(self, 
+                               recipient: str, 
+                               body_text: str, 
+                               buttons: List[Dict[str, str]], 
+                               header_text: Optional[str] = None,
+                               footer_text: Optional[str] = None,
+                               header_image: Optional[str] = None,
+                               header_video: Optional[str] = None,
+                               header_document: Optional[str] = None) -> Tuple[bool, str]:
+        """Send an interactive WhatsApp message with buttons.
+        
+        Args:
+            recipient: The recipient's phone number or WAID
+            body_text: The main text content of the message
+            buttons: List of button objects, each with 'text' key (and optionally 'id')
+            header_text: Optional text to display in the header
+            footer_text: Optional text to display in the footer
+            header_image: Optional URL or local path to an image to display in the header
+            header_video: Optional URL or local path to a video to display in the header
+            header_document: Optional URL or local path to a document to display in the header
+            
+        Returns:
+            A tuple of (success, message)
+        """
+        endpoint = "api/v1/sendInteractiveButtonsMessage"
+        params = {
+            "whatsappNumber": recipient
+        }
+        
+        # Prepare the data structure according to the API docs
+        data = {
+            "body": body_text,
+            "buttons": []
+        }
+        
+        # Format buttons according to WATI API requirements
+        for i, button in enumerate(buttons):
+            if "text" not in button:
+                logger.warning(f"Button {i} missing required 'text' field")
+                continue
+                
+            button_data = {
+                "text": button["text"]
+            }
+            
+            # Add button ID if provided, otherwise use text as ID
+            if "id" in button:
+                button_data["id"] = button["id"]
+            else:
+                button_data["id"] = button["text"]
+                
+            data["buttons"].append(button_data)
+            
+        # Add optional components if provided
+        if footer_text:
+            data["footer"] = footer_text
+            
+        # If any header content is provided, create a header object
+        if header_text or header_image or header_video or header_document:
+            data["header"] = {}
+            
+            if header_text:
+                data["header"]["text"] = header_text
+                
+            # Handle media header - only one type should be specified
+            # The WATI API appears to support both URL links and potentially uploaded files
+            if header_image:
+                # Set the header type to image
+                data["header"]["type"] = "Image"
+                data["header"]["media"] = {}
+                
+                # For URLs, use the url property
+                if header_image.startswith(('http://', 'https://')):
+                    data["header"]["media"]["url"] = header_image
+                # For local files, will need to handle file upload separately
+                else:
+                    data["header"]["media"]["fileName"] = os.path.basename(header_image)
+                    data["header"]["media"]["_path"] = header_image  # Internal property for tracking the path
+                    
+            elif header_video:
+                # Set the header type to video
+                data["header"]["type"] = "Video"
+                data["header"]["media"] = {}
+                
+                if header_video.startswith(('http://', 'https://')):
+                    data["header"]["media"]["url"] = header_video
+                else:
+                    data["header"]["media"]["fileName"] = os.path.basename(header_video)
+                    data["header"]["media"]["_path"] = header_video  # Internal property for tracking the path
+                    
+            elif header_document:
+                # Set the header type to document
+                data["header"]["type"] = "Document"
+                data["header"]["media"] = {}
+                
+                if header_document.startswith(('http://', 'https://')):
+                    data["header"]["media"]["url"] = header_document
+                else:
+                    data["header"]["media"]["fileName"] = os.path.basename(header_document)
+                    data["header"]["media"]["_path"] = header_document  # Internal property for tracking the path
+            elif header_text:
+                # If only text is provided, set the type to text
+                data["header"]["type"] = "Text"
+        
+        logger.info(f"Sending interactive buttons message to {recipient} with {len(data['buttons'])} buttons")
+        logger.debug(f"Interactive message data: {data}")
+        
+        # Check for local file paths that need to be uploaded
+        has_local_file = False
+        local_file_path = None
+        local_file_type = None
+        
+        if header_image and "_path" in data.get("header", {}).get("media", {}):
+            has_local_file = True
+            local_file_path = data["header"]["media"]["_path"]
+            local_file_type = "image"
+            # Remove the _path property since it's not part of the API spec
+            del data["header"]["media"]["_path"]
+            
+        elif header_video and "_path" in data.get("header", {}).get("media", {}):
+            has_local_file = True
+            local_file_path = data["header"]["media"]["_path"]
+            local_file_type = "video"
+            del data["header"]["media"]["_path"]
+            
+        elif header_document and "_path" in data.get("header", {}).get("media", {}):
+            has_local_file = True
+            local_file_path = data["header"]["media"]["_path"]
+            local_file_type = "document"
+            del data["header"]["media"]["_path"]
+            
+        # Temporary files from URLs
+        temp_file = None
+        
+        try:
+            url = f"{self.base_url}/{self.tenant_id}/{endpoint}"
+            
+            # If we have a local file path to upload
+            if has_local_file:
+                logger.info(f"Local file detected: {local_file_path}, type: {local_file_type}")
+                
+                # Check if it's a URL that we need to download first
+                if local_file_path.startswith(('http://', 'https://')):
+                    logger.info(f"Detected URL: {local_file_path}. Downloading to temporary file...")
+                    import tempfile
+                    import urllib.request
+                    from urllib.parse import urlparse
+                    from os.path import basename
+                    
+                    # Create a temporary file with an appropriate extension
+                    parsed_url = urlparse(local_file_path)
+                    file_name = basename(parsed_url.path)
+                    
+                    # If no extension in the URL, default to .tmp
+                    extension = os.path.splitext(file_name)[1]
+                    if not extension:
+                        extension = ".tmp"
+                    
+                    # Create the temp file
+                    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=extension)
+                    temp_file.close()
+                    
+                    # Download the file
+                    try:
+                        urllib.request.urlretrieve(local_file_path, temp_file.name)
+                        logger.info(f"Downloaded URL to temporary file: {temp_file.name}")
+                        local_file_path = temp_file.name
+                    except Exception as e:
+                        return False, f"Error downloading file from URL: {str(e)}"
+                
+                # Determine the MIME type
+                content_type = None
+                try:
+                    import mimetypes
+                    content_type = mimetypes.guess_type(local_file_path)[0]
+                    if not content_type:
+                        # Try to determine content type from extension
+                        ext = os.path.splitext(local_file_path)[1].lower()
+                        content_type_map = {
+                            '.jpg': 'image/jpeg',
+                            '.jpeg': 'image/jpeg',
+                            '.png': 'image/png',
+                            '.gif': 'image/gif',
+                            '.webp': 'image/webp',
+                            '.pdf': 'application/pdf',
+                            '.mp3': 'audio/mpeg',
+                            '.mp4': 'video/mp4',
+                            '.ogg': 'audio/ogg',
+                            '.txt': 'text/plain',
+                            '.doc': 'application/msword',
+                            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        }
+                        content_type = content_type_map.get(ext, 'application/octet-stream')
+                    
+                    logger.info(f"Determined content type: {content_type} for file: {local_file_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to determine content type: {str(e)}")
+                    content_type = 'application/octet-stream'  # Default fallback
+                
+                # Open the file and send as multipart/form-data
+                with open(local_file_path, "rb") as file:
+                    # Convert the JSON data to a string for form data
+                    import json
+                    json_data = json.dumps(data)
+                    
+                    # Specify the content type in the files parameter
+                    file_tuple = (os.path.basename(local_file_path), file, content_type)
+                    
+                    # Create form with both file and JSON data
+                    files = {
+                        "file": file_tuple,
+                        "messageData": (None, json_data, "application/json")
+                    }
+                    
+                    logger.info(f"Sending interactive buttons message with file {local_file_path} and content type: {content_type}")
+                    
+                    # Use raw requests instead of _make_request to handle file upload
+                    response = requests.post(
+                        url, 
+                        headers={"Authorization": self.headers["Authorization"]},
+                        params=params,
+                        files=files
+                    )
+            else:
+                # Standard JSON request without file upload
+                response = self._make_request("POST", endpoint, params=params, data=data)
+            
+            if hasattr(response, 'json'):
+                try:
+                    result = response.json()
+                except Exception as e:
+                    logger.error(f"Failed to parse JSON response: {e}")
+                    result = {"success": False, "error": f"Invalid JSON response: {response.text if hasattr(response, 'text') else 'No response text'}"}
+            else:
+                result = response
+                
+            logger.debug(f"Complete send_interactive_buttons response: {result}")
+            
+            # Try to get the actual message from the response
+            response_message = "Unknown message"
+            if isinstance(result, dict):
+                if "message" in result:
+                    response_message = result["message"]
+                elif "error" in result:
+                    response_message = result["error"]
+            
+            # Check both 'result' and 'success' fields
+            operation_success = False
+            if isinstance(result, dict):
+                # Check 'result' field first as it seems to indicate the operation success
+                if "result" in result:
+                    operation_success = bool(result["result"])
+                # If no 'result' field, fall back to the 'success' field
+                elif result.get("success", False):
+                    operation_success = True
+            
+            return operation_success, response_message
+                
+        except Exception as e:
+            logger.error(f"Error sending interactive buttons message: {str(e)}")
+            return False, f"Error sending interactive buttons message: {str(e)}"
+        finally:
+            # Clean up the temporary file if it exists
+            if temp_file and os.path.exists(temp_file.name):
+                try:
+                    os.unlink(temp_file.name)
+                    logger.info(f"Deleted temporary file: {temp_file.name}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete temporary file {temp_file.name}: {str(e)}")
 
 # Create a global API instance
 wati_api = WatiAPI() 

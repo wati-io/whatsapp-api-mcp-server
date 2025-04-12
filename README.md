@@ -115,6 +115,7 @@ Claude can access the following tools to interact with WhatsApp:
 - **send_file**: Send a file (image, video, raw audio, document) to a specified recipient
 - **send_audio_message**: Send an audio file via WhatsApp
 - **download_media**: Download media from a WhatsApp message and get the local file path
+- **send_interactive_buttons**: Send a message with interactive buttons for user responses
 
 ### Media Handling Features
 
@@ -130,6 +131,31 @@ You can send various media types to your WhatsApp contacts:
 #### Media Downloading
 
 To download media from a message, use the `download_media` tool with the filename (provided in the media message metadata). The tool will download the media file and return the local file path, which can then be opened or passed to another tool.
+
+### Interactive Buttons Feature
+
+The MCP server supports sending interactive messages with buttons, allowing your WhatsApp contacts to respond with predefined options:
+
+#### Interactive Buttons
+
+You can send customized interactive messages with up to 3 buttons:
+
+```
+send_interactive_buttons(
+    recipient="85264318721",
+    body_text="Would you like to proceed with your order?",
+    buttons=[
+        {"text": "Yes, proceed", "id": "proceed"},
+        {"text": "No, cancel", "id": "cancel"},
+        {"text": "Contact support", "id": "support"}
+    ],
+    header_text="Order Confirmation",
+    footer_text="Thank you for shopping with us!",
+    header_image="https://example.com/product.jpg"
+)
+```
+
+These interactive messages enhance the user experience by providing structured response options rather than requiring free-text replies.
 
 ## Technical Details
 

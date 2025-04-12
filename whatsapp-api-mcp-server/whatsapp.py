@@ -289,3 +289,25 @@ def download_media(message_id: str, chat_waid: str) -> Optional[str]:
     # Since we don't have a way to get the filename from the message ID,
     # we'll just use the message ID as the filename for now
     return wati_api.download_media(message_id)
+
+def send_interactive_buttons(
+    recipient: str,
+    body_text: str,
+    buttons: List[Dict[str, str]],
+    header_text: Optional[str] = None,
+    footer_text: Optional[str] = None,
+    header_image: Optional[str] = None,
+    header_video: Optional[str] = None,
+    header_document: Optional[str] = None
+) -> Tuple[bool, str]:
+    """Send an interactive WhatsApp message with buttons."""
+    return wati_api.send_interactive_buttons(
+        recipient=recipient,
+        body_text=body_text,
+        buttons=buttons,
+        header_text=header_text,
+        footer_text=footer_text,
+        header_image=header_image,
+        header_video=header_video,
+        header_document=header_document
+    )
