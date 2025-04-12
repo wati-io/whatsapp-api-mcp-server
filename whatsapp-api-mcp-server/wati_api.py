@@ -420,11 +420,26 @@ class WatiAPI:
         }
         
         response = self._make_request("POST", endpoint, params=params)
+        logger.debug(f"Complete send_message response: {response}")
         
-        if response.get("success", False):
-            return True, "Message sent successfully"
-        else:
-            return False, response.get("error", "Unknown error")
+        # Try to get the actual message from the response
+        response_message = "Unknown message"
+        if isinstance(response, dict):
+            if "message" in response:
+                response_message = response["message"]
+        
+        # WATI API has inconsistent success indicators
+        # Per the logs, 'success' indicates API call success, while 'result' indicates operation success
+        operation_success = False
+        if isinstance(response, dict):
+            # Check 'result' field first as it seems to indicate the operation success
+            if "result" in response:
+                operation_success = bool(response["result"])
+            # If no 'result' field, fall back to the 'success' field
+            elif response.get("success", False):
+                operation_success = True
+        
+        return operation_success, response_message
             
     def send_file(self, recipient: str, media_path: str, caption: str = "") -> Tuple[bool, str]:
         """Send a file via WhatsApp.
