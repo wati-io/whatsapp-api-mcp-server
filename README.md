@@ -103,7 +103,7 @@ Once connected, you can interact with your WhatsApp contacts through Claude, lev
 
 Claude can access the following tools to interact with WhatsApp:
 
-- **search_contacts**: Search for contacts by name or phone number
+- **search_contacts**: Search for contacts by name or phone number. Returns all available contact information including name, phone number, WhatsApp ID, status, creation date, and custom parameters.
 - **list_messages**: Retrieve messages with optional filters and context
 - **list_chats**: List available chats with metadata
 - **get_chat**: Get information about a specific chat

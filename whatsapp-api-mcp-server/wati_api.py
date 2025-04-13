@@ -34,6 +34,20 @@ class Contact:
     phone_number: str
     name: Optional[str]
     waid: Optional[str] = None
+    id: Optional[str] = None
+    source: Optional[str] = None
+    contact_status: Optional[str] = None
+    created: Optional[str] = None
+    last_updated: Optional[str] = None
+    allow_broadcast: Optional[bool] = None
+    first_name: Optional[str] = None
+    full_name: Optional[str] = None
+    photo: Optional[str] = None
+    custom_params: Optional[List[Dict[str, str]]] = None
+    opted_in: Optional[bool] = None
+    tenant_id: Optional[str] = None
+    tag_name: Optional[str] = None
+    display_id: Optional[str] = None
     
 @dataclass
 class Message:
@@ -165,11 +179,12 @@ class WatiAPI:
         contacts = []
         # Check different possible response formats
         if isinstance(response, dict):
-            # Try to find contacts data in different possible fields
+            # The standard response format from the logs shows contact_list as the main container
             contacts_data = None
             
             if "contact_list" in response:
                 contacts_data = response["contact_list"]
+            # Fallback to other possible formats if contact_list is not found
             elif "contacts" in response:
                 contacts_data = response["contacts"]
             elif "data" in response:
@@ -180,40 +195,58 @@ class WatiAPI:
             if contacts_data and isinstance(contacts_data, list):
                 logger.info(f"Found {len(contacts_data)} contacts")
                 for contact_data in contacts_data:
-                    logger.debug(f"Processing contact: {contact_data}")
-                    phone_number = ""
-                    name = ""
-                    waid = ""
-                    
-                    # Try different common field names for phone number
-                    for field in ["phone", "phoneNumber", "wAid", "number", "whatsappNumber"]:
-                        if field in contact_data and contact_data[field]:
-                            phone_number = str(contact_data[field])
-                            break
-                    
-                    # Try to get WAID (WhatsApp ID)
-                    for field in ["wAid", "id", "waId", "whatsappId"]:
-                        if field in contact_data and contact_data[field]:
-                            waid = str(contact_data[field])
-                            break
-                    
-                    # If WAID is not found, use phone number as WAID
-                    if not waid and phone_number:
-                        waid = phone_number
-                            
-                    # Try different common field names for name
-                    for field in ["fullName", "firstName", "name", "contactName", "displayName"]:
-                        if field in contact_data and contact_data[field]:
-                            name = str(contact_data[field])
-                            break
-                    
-                    if phone_number:
+                    try:
+                        # Extract all contact data from the response
+                        phone_number = contact_data.get("phone", "")
+                        name = contact_data.get("fullName", "")
+                        waid = contact_data.get("wAid", "")
+                        
+                        # If critical fields are missing, try alternative field names
+                        if not phone_number:
+                            for field in ["phoneNumber", "number", "whatsappNumber", "displayId"]:
+                                if field in contact_data and contact_data[field]:
+                                    phone_number = str(contact_data[field])
+                                    break
+                        
+                        if not waid:
+                            for field in ["id", "waId", "whatsappId"]:
+                                if field in contact_data and contact_data[field]:
+                                    waid = str(contact_data[field])
+                                    break
+                        
+                        # If WAID is not found, use phone number as WAID
+                        if not waid and phone_number:
+                            waid = phone_number
+                                
+                        if not name:
+                            for field in ["firstName", "name", "contactName", "displayName"]:
+                                if field in contact_data and contact_data[field]:
+                                    name = str(contact_data[field])
+                                    break
+                        
+                        # Extract all additional fields available
                         contact = Contact(
                             phone_number=phone_number,
                             name=name,
-                            waid=waid
+                            waid=waid,
+                            id=str(contact_data.get("id", "")),
+                            source=contact_data.get("source", None),
+                            contact_status=contact_data.get("contactStatus", None),
+                            created=contact_data.get("created", None),
+                            last_updated=contact_data.get("lastUpdated", None),
+                            allow_broadcast=contact_data.get("allowBroadcast", None),
+                            first_name=contact_data.get("firstName", None),
+                            full_name=contact_data.get("fullName", None),
+                            photo=contact_data.get("photo", None),
+                            custom_params=contact_data.get("customParams", None),
+                            opted_in=contact_data.get("optedIn", None),
+                            tenant_id=contact_data.get("tenantId", None),
+                            tag_name=contact_data.get("tagName", None),
+                            display_id=contact_data.get("displayId", None)
                         )
                         contacts.append(contact)
+                    except Exception as e:
+                        logger.warning(f"Error processing contact data: {e}")
         
         if not contacts:
             logger.warning(f"Failed to parse contacts or no contacts found. Response structure: {list(response.keys()) if isinstance(response, dict) else 'Not a dict'}")

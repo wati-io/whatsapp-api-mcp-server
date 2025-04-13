@@ -8,17 +8,47 @@ import json
 from wati_api import wati_api, Message, Chat, Contact, MessageContext
 
 def search_contacts(query: str) -> List[Dict[str, Any]]:
-    """Search WhatsApp contacts by name or phone number."""
+    """
+    Search WhatsApp contacts by name or phone number.
+    Returns all available contact information including name, phone number, WhatsApp ID, 
+    creation date, status, custom parameters, and other fields from the WATI API.
+    """
     contacts = wati_api.search_contacts(query)
     
     # Convert to dictionary format for the MCP API
     result = []
     for contact in contacts:
-        result.append({
+        # Create a dictionary with all available contact fields
+        contact_dict = {
             "phone_number": contact.phone_number,
             "name": contact.name,
-            "waid": contact.waid
-        })
+            "waid": contact.waid,
+            "id": contact.id,
+            "source": contact.source,
+            "contact_status": contact.contact_status,
+            "created": contact.created,
+            "last_updated": contact.last_updated,
+            "allow_broadcast": contact.allow_broadcast,
+            "first_name": contact.first_name,
+            "full_name": contact.full_name,
+            "photo": contact.photo,
+            "opted_in": contact.opted_in,
+            "tenant_id": contact.tenant_id,
+            "tag_name": contact.tag_name,
+            "display_id": contact.display_id
+        }
+        
+        # Add custom params if available
+        if contact.custom_params:
+            # Convert custom params from list of dicts to a single dict for easier access
+            custom_params_dict = {}
+            for param in contact.custom_params:
+                if isinstance(param, dict) and "name" in param and "value" in param:
+                    custom_params_dict[param["name"]] = param["value"]
+            
+            contact_dict["custom_params"] = custom_params_dict
+        
+        result.append(contact_dict)
     
     return result
 

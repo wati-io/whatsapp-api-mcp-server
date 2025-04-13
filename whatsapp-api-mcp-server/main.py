@@ -21,10 +21,16 @@ mcp = FastMCP("whatsapp")
 
 @mcp.tool()
 def search_contacts(query: str) -> List[Dict[str, Any]]:
-    """Search WhatsApp contacts by name or phone number.
+    """
+    Searches WhatsApp contacts based on a query.
+    Returns all available contact information including name, phone number, WhatsApp ID,
+    creation date, status, custom parameters, and other fields from the WATI API.
     
     Args:
-        query: Search term to match against contact names or phone numbers
+        query: A search term to find matching contacts
+        
+    Returns:
+        A list of contacts with all available contact information
     """
     contacts = whatsapp_search_contacts(query)
     return contacts
