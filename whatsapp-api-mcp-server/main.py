@@ -7,8 +7,6 @@ from whatsapp import (
     get_chat as whatsapp_get_chat,
     get_direct_chat_by_contact as whatsapp_get_direct_chat_by_contact,
     get_contact_chats as whatsapp_get_contact_chats,
-    get_last_interaction as whatsapp_get_last_interaction,
-    get_message_context as whatsapp_get_message_context,
     send_message as whatsapp_send_message,
     send_file as whatsapp_send_file,
     send_audio_message as whatsapp_audio_voice_message,
@@ -134,32 +132,6 @@ def get_contact_chats(waid: str, limit: int = 20, page: int = 0) -> List[Dict[st
     """
     chats = whatsapp_get_contact_chats(waid, limit, page)
     return chats
-
-@mcp.tool()
-def get_last_interaction(waid: str) -> str:
-    """Get most recent WhatsApp message involving the contact.
-    
-    Args:
-        waid: The WhatsApp ID (WAID) of the contact to search for
-    """
-    message = whatsapp_get_last_interaction(waid)
-    return message
-
-@mcp.tool()
-def get_message_context(
-    message_id: str,
-    before: int = 5,
-    after: int = 5
-) -> Dict[str, Any]:
-    """Get context around a specific WhatsApp message.
-    
-    Args:
-        message_id: The ID of the message to get context for
-        before: Number of messages to include before the target message (default 5)
-        after: Number of messages to include after the target message (default 5)
-    """
-    context = whatsapp_get_message_context(message_id, before, after)
-    return context
 
 @mcp.tool()
 def send_message(
