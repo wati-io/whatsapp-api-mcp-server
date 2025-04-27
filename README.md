@@ -1,5 +1,7 @@
 # WhatsApp MCP Server with Wati API
 
+[![smithery badge](https://smithery.ai/badge/@wati-io/whatsapp-api-mcp-server)](https://smithery.ai/server/@wati-io/whatsapp-api-mcp-server)
+
 This is a Model Context Protocol (MCP) server for WhatsApp using the Wati API.
 
 With this you can search and read your WhatsApp messages, search your contacts, and send messages to individuals. You can also send media files including images, videos, documents, and audio messages.
@@ -13,6 +15,14 @@ Here's an example of what you can do when it's connected to Claude.
 > To get updates on this and other projects I work on [enter your email here](https://docs.google.com/forms/d/1rTF9wMBTN0vPfzWuQa2BjfGKdKIpTbyeKxhPMcEzgyI/preview)
 
 ## Installation
+
+### Installing via Smithery
+
+To install WhatsApp Integration Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@wati-io/whatsapp-api-mcp-server):
+
+```bash
+npx -y @smithery/cli install @wati-io/whatsapp-api-mcp-server --client claude
+```
 
 ### Prerequisites
 
