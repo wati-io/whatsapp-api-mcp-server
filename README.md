@@ -14,6 +14,16 @@ Here's an example of what you can do when it's connected to Claude.
 
 ## Installation
 
+### Installing via Smithery
+
+To install WhatsApp Integration Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@wati-io/whatsapp-api-mcp-server):
+
+```bash
+npx -y @smithery/cli install @wati-io/whatsapp-api-mcp-server --client claude
+```
+
+[![smithery badge](https://smithery.ai/badge/@wati-io/whatsapp-api-mcp-server)](https://smithery.ai/server/@wati-io/whatsapp-api-mcp-server)
+
 ### Prerequisites
 
 - Python 3.6+
