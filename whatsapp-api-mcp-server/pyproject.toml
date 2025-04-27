@@ -1,8 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "whatsapp-mcp"
 version = "0.1.0"
 description = "WhatsApp MCP Server using Wati API"
 requires-python = ">=3.11"
+authors = [
+    {name = "WhatsApp MCP Contributors"}
+]
+readme = "README.md"
+license = {file = "LICENSE"}
 dependencies = [
     "requests>=2.28.0",
     "python-dotenv>=0.21.0",
@@ -11,3 +20,13 @@ dependencies = [
 
 [project.optional-dependencies]
 cli = ["mcp[cli]>=1.6.0"]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["whatsapp_mcp"]
+
+[project.scripts]
+whatsapp-mcp = "whatsapp_mcp.main:run_server"

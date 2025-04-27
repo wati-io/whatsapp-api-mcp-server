@@ -5,7 +5,7 @@ import os
 import requests
 import json
 
-from wati_api import wati_api, Message, Chat, Contact, MessageContext
+from .wati_api import wati_api, Message, Chat, Contact, MessageContext
 
 def search_contacts(query: str) -> List[Dict[str, Any]]:
     """

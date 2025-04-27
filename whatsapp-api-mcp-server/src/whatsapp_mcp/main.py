@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
 from mcp.server.fastmcp import FastMCP
-from whatsapp import (
+from .whatsapp import (
     search_contacts as whatsapp_search_contacts,
     list_messages as whatsapp_list_messages,
     list_chats as whatsapp_list_chats,
@@ -288,6 +288,9 @@ def send_interactive_buttons(
         "message": status_message
     }
 
+def run_server():
+    """Run the WhatsApp MCP Server."""
+    mcp.run()
+
 if __name__ == "__main__":
-    # Initialize and run the server
-    mcp.run(transport='stdio')
+    run_server()

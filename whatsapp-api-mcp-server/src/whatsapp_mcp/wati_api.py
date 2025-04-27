@@ -16,8 +16,17 @@ logging.basicConfig(
 logger = logging.getLogger("wati_api")
 
 # Load environment variables from .env file
-env_path = Path(__file__).resolve().parent / '.env'
-load_dotenv(dotenv_path=env_path)
+# Look first in the current directory, then go up to the project root
+env_paths = [
+    Path(__file__).resolve().parent / '.env',  # In the same directory as the module
+    Path(__file__).resolve().parent.parent.parent / '.env',  # In the project root
+]
+
+for env_path in env_paths:
+    if env_path.exists():
+        logger.info(f"Loading .env from {env_path}")
+        load_dotenv(dotenv_path=env_path)
+        break
 
 # Configuration
 # These values should be set in environment variables

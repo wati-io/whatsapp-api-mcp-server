@@ -4,4 +4,4 @@
 uv pip install -e .
 
 # Run the MCP server
-python main.py 
+python -m whatsapp_mcp.main 

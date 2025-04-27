@@ -8,7 +8,7 @@ import os
 import logging
 import json
 import requests
-from wati_api import wati_api
+from whatsapp_mcp.wati_api import wati_api
 
 # Make sure our root logger is configured properly
 logging.basicConfig(
