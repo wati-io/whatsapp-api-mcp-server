@@ -1,0 +1,29 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - watiApiBaseUrl
+      - watiTenantId
+      - watiAuthToken
+    properties:
+      watiApiBaseUrl:
+        type: string
+        description: The base URL for the Wati API
+      watiTenantId:
+        type: string
+        description: Your Wati tenant ID
+      watiAuthToken:
+        type: string
+        description: Your Wati authentication token
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => ({command: 'whatsapp-mcp', args: [], env: {WATI_API_BASE_URL: config.watiApiBaseUrl, WATI_TENANT_ID: config.watiTenantId, WATI_AUTH_TOKEN: config.watiAuthToken}})
+  exampleConfig:
+    watiApiBaseUrl: https://api.wati.io
+    watiTenantId: tenant_12345
+    watiAuthToken: abcd1234efgh5678
